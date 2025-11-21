@@ -1,6 +1,7 @@
 // src/components/pokemon/PokemonList.tsx
 import React, { useCallback, useMemo } from 'react';
 import { FixedSizeList as WindowedList } from 'react-window';
+import { useInfiniteLoader } from 'react-window-infinite-loader';
 import { usePokemonList } from '../../hooks/use-pokemon-list';
 import { useFavorites } from '../../hooks/use-favorites';
 import { useSelection } from '../../hooks/use-selection';
@@ -19,7 +20,7 @@ type ItemData = {
 };
 
 export const PokemonList: React.FC = () => {
-  const { filteredList, listStatus, listError } = usePokemonList();
+  const { filteredList, listStatus, listError, hasMore, loadMore } = usePokemonList();
   const { favoriteIds, toggleFavorite } = useFavorites();
   const { selectedPokemonId, selectPokemon } = useSelection();
 
@@ -44,6 +45,14 @@ export const PokemonList: React.FC = () => {
       style: React.CSSProperties;
       data: ItemData;
     }) => {
+      const isLoaderRow = index >= data.items.length;
+      if (isLoaderRow) {
+        return (
+          <div style={style} className="px-3 py-2 text-xs text-slate-500">
+            Loading more...
+          </div>
+        );
+      }
       const pokemon = data.items[index];
 
       return (
@@ -61,6 +70,18 @@ export const PokemonList: React.FC = () => {
     },
     []
   );
+
+  const itemCount = filteredList.length + (hasMore ? 1 : 0);
+  const isRowLoaded = (index: number) => index < filteredList.length;
+  const loadMoreRows = async (_startIndex: number, _stopIndex: number) => {
+    if (hasMore) await loadMore();
+  };
+  const onRowsRendered = useInfiniteLoader({
+    isRowLoaded,
+    loadMoreRows,
+    rowCount: itemCount,
+    threshold: 5
+  });
 
   if (listStatus === 'loading') {
     return (
@@ -90,9 +111,13 @@ export const PokemonList: React.FC = () => {
     <WindowedList
       height={600}
       width="100%"
-      itemCount={filteredList.length}
+      itemCount={itemCount}
       itemSize={ITEM_HEIGHT}
       itemData={itemData}
+      itemKey={(index: number) => (index < filteredList.length ? filteredList[index].id : `loader-${index}`)}
+      onItemsRendered={({ visibleStartIndex, visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) =>
+        onRowsRendered({ startIndex: visibleStartIndex, stopIndex: visibleStopIndex })
+      }
     >
       {Row}
     </WindowedList>

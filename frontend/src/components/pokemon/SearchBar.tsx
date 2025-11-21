@@ -1,4 +1,4 @@
-import React, { ChangeEvent } from 'react';
+import React, { type ChangeEvent } from 'react';
 import { SearchIcon } from '../icons/Search';
 
 interface Props {

@@ -14,8 +14,14 @@ export interface PokemonDetails {
   evolutions: string[];
 }
 
-export async function fetchPokemonList(limit = 150): Promise<PokemonSummary[]> {
-  return getJSON<PokemonSummary[]>('/api/pokemon', { params: { limit } });
+export interface PokemonPage {
+  items: PokemonSummary[];
+  hasMore: boolean;
+  nextOffset: number | null;
+}
+
+export async function fetchPokemonPage(limit = 50, offset = 0): Promise<PokemonPage> {
+  return getJSON<PokemonPage>('/api/pokemon', { params: { limit, offset } });
 }
 
 export async function fetchPokemonDetails(

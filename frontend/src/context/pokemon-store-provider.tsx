@@ -1,9 +1,4 @@
-import React, {
-  createContext,
-  useReducer,
-  useMemo,
-  ReactNode
-} from 'react';
+import React, { createContext, useReducer, useMemo, type ReactNode } from 'react';
 import type { PokemonSummary, PokemonDetails } from '../api/pokemon-api';
 import type { Favorite } from '../api/favourite-api';
 
@@ -13,6 +8,8 @@ interface PokemonStoreState {
   list: PokemonSummary[];
   listStatus: Status;
   listError: string | null;
+  listHasMore: boolean;
+  listNextOffset: number | null;
 
   favorites: Favorite[];
   favoritesStatus: Status;
@@ -30,8 +27,15 @@ interface PokemonStoreState {
 
 type Action =
   | { type: 'SET_LIST_LOADING' }
-  | { type: 'SET_LIST_SUCCESS'; payload: PokemonSummary[] }
+  | {
+      type: 'SET_LIST_SUCCESS';
+      payload: { items: PokemonSummary[]; hasMore: boolean; nextOffset: number | null };
+    }
   | { type: 'SET_LIST_ERROR'; payload: string }
+  | {
+      type: 'APPEND_LIST_SUCCESS';
+      payload: { items: PokemonSummary[]; hasMore: boolean; nextOffset: number | null };
+    }
   | { type: 'SET_FAVORITES_LOADING' }
   | { type: 'SET_FAVORITES_SUCCESS'; payload: Favorite[] }
   | { type: 'SET_FAVORITES_ERROR'; payload: string }
@@ -55,6 +59,8 @@ const initialState: PokemonStoreState = {
   list: [],
   listStatus: 'idle',
   listError: null,
+  listHasMore: true,
+  listNextOffset: 0,
 
   favorites: [],
   favoritesStatus: 'idle',
@@ -78,9 +84,22 @@ function reducer(
     case 'SET_LIST_LOADING':
       return { ...state, listStatus: 'loading', listError: null };
     case 'SET_LIST_SUCCESS':
-      return { ...state, listStatus: 'success', list: action.payload };
+      return {
+        ...state,
+        listStatus: 'success',
+        list: action.payload.items,
+        listHasMore: action.payload.hasMore,
+        listNextOffset: action.payload.nextOffset,
+      };
     case 'SET_LIST_ERROR':
       return { ...state, listStatus: 'error', listError: action.payload };
+    case 'APPEND_LIST_SUCCESS':
+      return {
+        ...state,
+        list: [...state.list, ...action.payload.items],
+        listHasMore: action.payload.hasMore,
+        listNextOffset: action.payload.nextOffset,
+      };
     case 'SET_FAVORITES_LOADING':
       return {
         ...state,

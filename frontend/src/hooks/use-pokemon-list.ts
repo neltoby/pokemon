@@ -1,10 +1,21 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePokemonStore } from './use-pokemon-store';
-import { fetchPokemonList } from '../api/pokemon-api';
+import { fetchPokemonPage } from '../api/pokemon-api';
+
+const PAGE_SIZE = 50;
 
 export function usePokemonList() {
   const { state, dispatch } = usePokemonStore();
-  const { list, listStatus, listError, favorites, searchTerm, showFavoritesOnly } =
+  const {
+    list,
+    listStatus,
+    listError,
+    listHasMore,
+    listNextOffset,
+    favorites,
+    searchTerm,
+    showFavoritesOnly,
+  } =
     state;
 
   const startedRef = useRef(false);
@@ -20,9 +31,9 @@ export function usePokemonList() {
     const load = async () => {
       dispatch({ type: 'SET_LIST_LOADING' });
       try {
-        const data = await fetchPokemonList(150);
+        const page = await fetchPokemonPage(PAGE_SIZE, 0);
         if (cancelled) return;
-        dispatch({ type: 'SET_LIST_SUCCESS', payload: data });
+        dispatch({ type: 'SET_LIST_SUCCESS', payload: page });
       } catch (err: any) {
         if (cancelled) return;
         dispatch({
@@ -45,24 +56,45 @@ export function usePokemonList() {
   );
 
   const filteredList = useMemo(() => {
-    let result = list;
+    if (showFavoritesOnly) {
+      // Render from favorites directly so we don't depend on loaded pages
+      let favs = favorites.map(f => ({ id: f.pokemonId, name: f.pokemonName, url: '' }));
+      if (searchTerm.trim()) {
+        const term = searchTerm.trim().toLowerCase();
+        favs = favs.filter(p => p.name.toLowerCase().includes(term));
+      }
+      return favs;
+    }
 
+    let result = list;
     if (searchTerm.trim()) {
       const term = searchTerm.trim().toLowerCase();
       result = result.filter(p => p.name.toLowerCase().includes(term));
     }
-
-    if (showFavoritesOnly) {
-      result = result.filter(p => favoriteIds.has(p.id));
-    }
-
     return result;
-  }, [list, searchTerm, showFavoritesOnly, favoriteIds]);
+  }, [list, favorites, searchTerm, showFavoritesOnly]);
+
+  const loadingMoreRef = useRef(false);
+  const loadMore = useCallback(async () => {
+    if (showFavoritesOnly) return; // no paging in favorites-only mode
+    if (loadingMoreRef.current) return;
+    if (!listHasMore) return;
+    if (listNextOffset == null) return;
+    loadingMoreRef.current = true;
+    try {
+      const page = await fetchPokemonPage(PAGE_SIZE, listNextOffset);
+      dispatch({ type: 'APPEND_LIST_SUCCESS', payload: page });
+    } finally {
+      loadingMoreRef.current = false;
+    }
+  }, [showFavoritesOnly, listHasMore, listNextOffset, dispatch]);
 
   return {
     listStatus,
     listError,
     favoriteIds,
-    filteredList
+    filteredList,
+    hasMore: showFavoritesOnly ? false : listHasMore,
+    loadMore
   };
 }

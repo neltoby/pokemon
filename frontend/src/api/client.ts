@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig } from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
