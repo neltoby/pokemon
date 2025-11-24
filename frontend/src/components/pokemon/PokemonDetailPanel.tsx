@@ -1,7 +1,6 @@
 import React from 'react';
 import { useSelection } from '../../hooks/use-selection';
 import { usePokemonDetails } from '../../hooks/use-pokemon-details';
-import { Spinner } from '../layout/Spinner';
 import { ErrorBanner } from '../layout/ErrorBanner';
 import { PokemonImg } from './PokemonImg';
 import { Card, CardBody } from '../ui/Card';

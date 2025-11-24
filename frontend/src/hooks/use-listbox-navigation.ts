@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 interface ItemLike { id: number; name: string }
 
@@ -44,4 +44,3 @@ export function useListboxNavigation({ items, selectedId, onSelect, onToggleFavo
   // expose the index to allow consumers to scroll into view
   return { activeIndex, aria };
 }
-

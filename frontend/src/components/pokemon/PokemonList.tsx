@@ -5,7 +5,6 @@ import { useInfiniteLoader } from 'react-window-infinite-loader';
 import { usePokemonList } from '../../hooks/use-pokemon-list';
 import { useFavorites } from '../../hooks/use-favorites';
 import { useSelection } from '../../hooks/use-selection';
-import { Spinner } from '../layout/Spinner';
 import { ErrorBanner } from '../layout/ErrorBanner';
 import { PokemonListItem } from './PokemonListItem';
 import { useListboxNavigation } from '../../hooks/use-listbox-navigation';
@@ -29,7 +28,7 @@ type ItemData = {
 export const PokemonList: React.FC<{ focusRef?: React.Ref<HTMLDivElement>; height?: number }> = ({ focusRef, height }) => {
   const { filteredList, listStatus, listError, hasMore, loadMore } = usePokemonList();
   const { favoriteIds, toggleFavorite } = useFavorites();
-  const { selectedPokemonId, selectPokemon, selectNext, selectPrev } = useSelection();
+  const { selectedPokemonId, selectPokemon } = useSelection();
 
   const itemData: ItemData = useMemo(
     () => ({
@@ -162,8 +161,10 @@ export const PokemonList: React.FC<{ focusRef?: React.Ref<HTMLDivElement>; heigh
       aria-label="Pokémon list"
       className="relative h-full focus:outline-none focus:ring-2 focus:ring-primary/70 rounded-xl"
       style={{ minHeight: LIST_MIN_HEIGHT_PX }}
-      onKeyDown={(e) => { aria.onKeyDown?.(e); onWrapperKeyDown(e); }}
-      {...aria}
+      {...({
+        ...aria,
+        onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => { aria.onKeyDown?.(e); onWrapperKeyDown(e); }
+      } as React.HTMLAttributes<HTMLDivElement>)}
     >
       <WindowedList
         height={(height && height > 0) ? height : (containerHeight > 0 ? containerHeight : 360)}
