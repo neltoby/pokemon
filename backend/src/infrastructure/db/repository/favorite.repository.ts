@@ -25,14 +25,21 @@ export class FavoriteRepository implements IFavoriteRepository {
   }
 
   async findAll(): Promise<Favorite[]> {
-    const docs = await FavoriteModel.find()
+    type FavoriteLean = {
+      _id?: unknown;
+      pokemonId: number;
+      pokemonName: string;
+      createdAt: Date;
+    };
+
+    const docs = (await FavoriteModel.find()
       .sort({ createdAt: -1 })
       .select('pokemonId pokemonName createdAt')
       .lean()
-      .exec();
-    return docs.map((doc: any) =>
+      .exec()) as FavoriteLean[];
+    return docs.map((doc) =>
       Favorite.fromPrimitives({
-        id: doc._id ? String(doc._id) : undefined,
+        id: doc._id != null ? String(doc._id) : undefined,
         pokemonId: doc.pokemonId,
         pokemonName: doc.pokemonName,
         createdAt: doc.createdAt,

@@ -1,5 +1,5 @@
 // src/infrastructure/http/PokeApiGateway.ts
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import axiosRetry from 'axios-retry';
 import http from 'http';
 import https from 'https';
@@ -9,6 +9,16 @@ import {
   PokemonSummary,
 } from '../../domain/repositories/interface/pokemon-gateway.interface';
 import { env } from '../../config/env';
+import {
+  AXIOS_RETRIES,
+  DETAILS_TTL_MS,
+  LRU_DEFAULT_TTL_MS,
+  LRU_MAX_SIZE,
+  SEMAPHORE_MAX_CONCURRENCY,
+  UPSTREAM_TIMEOUT_MS,
+  DEFAULT_PAGE_SIZE,
+  FIRST_GENERATION_MAX,
+} from '../../shared/constants';
 
 // Lightweight in-memory LRU cache with TTL
 class SimpleLRU<V> {
@@ -66,12 +76,9 @@ class SimpleSemaphore {
 export class PokeApiGateway implements IPokemonGateway {
   private readonly baseUrl: string;
   private readonly client: AxiosInstance;
-  private readonly cache: SimpleLRU<any>;
-  private readonly inflight: Map<string, Promise<any>> = new Map();
+  private readonly cache: SimpleLRU<unknown>;
+  private readonly inflight: Map<string, Promise<unknown>> = new Map();
   private readonly sem: SimpleSemaphore;
-
-  private static readonly LIST_TTL_MS = 5 * 60 * 1000; // 5 minutes
-  private static readonly DETAILS_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
   constructor() {
     this.baseUrl = env.POKEAPI_BASE_URL;
@@ -81,13 +88,13 @@ export class PokeApiGateway implements IPokemonGateway {
     const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
     this.client = axios.create({
       baseURL: this.baseUrl,
-      timeout: 15000,
+      timeout: UPSTREAM_TIMEOUT_MS,
       httpAgent,
       httpsAgent,
     });
 
     axiosRetry(this.client, {
-      retries: 3,
+      retries: AXIOS_RETRIES,
       retryDelay: axiosRetry.exponentialDelay,
       shouldResetTimeout: true,
       retryCondition: (error) => {
@@ -98,19 +105,22 @@ export class PokeApiGateway implements IPokemonGateway {
     });
 
     // LRU cache (size tuned for project scale)
-    this.cache = new SimpleLRU<any>(200, 5 * 60 * 1000);
+    this.cache = new SimpleLRU<unknown>(LRU_MAX_SIZE, LRU_DEFAULT_TTL_MS);
     // Limit upstream concurrency to avoid socket/CPU contention
-    this.sem = new SimpleSemaphore(10);
+    this.sem = new SimpleSemaphore(SEMAPHORE_MAX_CONCURRENCY);
 
-    // Warm cache for the first 150 (3 pages of 50) asynchronously
+    // Warm cache for the first generation asynchronously
     setTimeout(() => {
-      [0, 50, 100].forEach((offset) => {
-        this.listFirstGeneration(50, offset).catch(() => {});
-      });
+      for (let offset = 0; offset < FIRST_GENERATION_MAX; offset += DEFAULT_PAGE_SIZE) {
+        this.listFirstGeneration(DEFAULT_PAGE_SIZE, offset).catch(() => {});
+      }
     }, 0);
   }
 
-  private async getUpstream<T = any>(url: string, config?: any) {
+  private async getUpstream<T = unknown>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<T>> {
     const release = await this.sem.acquire();
     try {
       return await this.client.get<T>(url, config);
@@ -147,19 +157,18 @@ export class PokeApiGateway implements IPokemonGateway {
     const key = `list:${effectiveLimit}:${offset}`;
     return this.cached<PokemonSummary[]>(
       key,
-      PokeApiGateway.LIST_TTL_MS,
+      LRU_DEFAULT_TTL_MS,
       async () => {
-        const resp = await this.getUpstream(`/pokemon`, {
+        interface PokeListResponse {
+          results: { name: string; url: string }[];
+        }
+        const resp = await this.getUpstream<PokeListResponse>(`/pokemon`, {
           params: { limit: effectiveLimit, offset },
         });
-        return resp.data.results.map((p: any) => {
-          const m = /\/pokemon\/(\d+)\/?$/.exec(p.url as string);
+        return resp.data.results.map(({ name, url }) => {
+          const m = /\/pokemon\/(\d+)\/?$/.exec(url);
           const id = m ? parseInt(m[1], 10) : NaN;
-          return {
-            id,
-            name: p.name,
-            url: p.url,
-          } as PokemonSummary;
+          return { id, name, url } satisfies PokemonSummary;
         });
       },
     );
@@ -169,46 +178,72 @@ export class PokeApiGateway implements IPokemonGateway {
     const key = `details:${nameOrId}`;
     return this.cached<PokemonDetails>(
       key,
-      PokeApiGateway.DETAILS_TTL_MS,
+      DETAILS_TTL_MS,
       async () => {
-        const pokemonResp = await this.getUpstream(`/pokemon/${nameOrId}`);
+        interface PokemonResponse {
+          id: number;
+          name: string;
+          abilities: { ability: { name: string } }[];
+          types: { type: { name: string } }[];
+          species: { url: string };
+          sprites?: { back_default?: string | null; front_default?: string | null };
+        }
+        interface SpeciesResponse {
+          evolution_chain?: { url?: string | null } | null;
+        }
+        interface EvolutionChainNode {
+          species: { name: string };
+          evolves_to: EvolutionChainNode[];
+        }
+        interface EvolutionChainResponse {
+          chain: EvolutionChainNode;
+        }
 
-        const speciesResp = await this.getUpstream(pokemonResp.data.species.url);
-        const evolutionChainUrl = speciesResp.data.evolution_chain?.url;
+        const pokemonResp = await this.getUpstream<PokemonResponse>(
+          `/pokemon/${nameOrId}`,
+        );
+
+        const speciesResp = await this.getUpstream<SpeciesResponse>(
+          pokemonResp.data.species.url,
+        );
+        const evolutionChainUrl = speciesResp.data.evolution_chain?.url ?? undefined;
 
         let evolutions: string[] = [];
         if (evolutionChainUrl) {
-          const evolutionResp = await this.getUpstream(evolutionChainUrl);
-          evolutions = this.extractEvolutions(
-            evolutionResp.data.chain,
+          const evolutionResp = await this.getUpstream<EvolutionChainResponse>(
+            evolutionChainUrl,
           );
+          evolutions = this.extractEvolutions(evolutionResp.data.chain);
         }
+
+        const imageUrl = pokemonResp.data.sprites?.back_default ?? null;
 
         return {
           id: pokemonResp.data.id,
           name: pokemonResp.data.name,
-          abilities: pokemonResp.data.abilities.map(
-            (a: any) => a.ability.name,
-          ),
-          types: pokemonResp.data.types.map((t: any) => t.type.name),
+          abilities: pokemonResp.data.abilities.map((a) => a.ability.name),
+          types: pokemonResp.data.types.map((t) => t.type.name),
           evolutions,
+          imageUrl,
         };
       },
     );
   }
 
-  private extractEvolutions(chainNode: any): string[] {
+  private extractEvolutions(chainNode: unknown): string[] {
+    type Node = { species: { name: string }; evolves_to: Node[] };
+    const node = chainNode as Node;
     const result: string[] = [];
 
-    const traverse = (node: any) => {
-      if (!node) return;
-      result.push(node.species.name);
-      if (node.evolves_to && node.evolves_to.length > 0) {
-        node.evolves_to.forEach((n: any) => traverse(n));
+    const traverse = (n: Node | null | undefined) => {
+      if (!n) return;
+      result.push(n.species.name);
+      if (n.evolves_to && n.evolves_to.length > 0) {
+        n.evolves_to.forEach((child) => traverse(child));
       }
     };
 
-    traverse(chainNode);
+    traverse(node);
 
     // remove duplicates and return
     return [...new Set(result)];

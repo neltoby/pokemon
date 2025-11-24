@@ -32,14 +32,16 @@ export function usePokemonDetails(pokemonId: number | null) {
           type: 'SET_DETAILS_SUCCESS',
           payload: { pokemonId, details: data }
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (cancelled) return;
         dispatch({
           type: 'SET_DETAILS_ERROR',
           payload: {
             pokemonId,
             error:
-              err?.message || 'Failed to load Pokémon details'
+              err instanceof Error
+                ? err.message
+                : 'Failed to load Pokémon details'
           }
         });
       }

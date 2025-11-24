@@ -1,5 +1,5 @@
 // src/components/pokemon/PokemonList.tsx
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect } from 'react';
 import { FixedSizeList as WindowedList } from 'react-window';
 import { useInfiniteLoader } from 'react-window-infinite-loader';
 import { usePokemonList } from '../../hooks/use-pokemon-list';
@@ -8,8 +8,15 @@ import { useSelection } from '../../hooks/use-selection';
 import { Spinner } from '../layout/Spinner';
 import { ErrorBanner } from '../layout/ErrorBanner';
 import { PokemonListItem } from './PokemonListItem';
+import { useListboxNavigation } from '../../hooks/use-listbox-navigation';
+import { useScrollHint } from '../../hooks/use-scroll-hint';
+import { ScrollHint } from '../ui/ScrollHint';
+import { ScrollFades } from '../ui/ScrollFades';
+import { useElementSize } from '../../hooks/use-element-size';
+import { useScrollFades } from '../../hooks/use-scroll-fades';
+import { ErrorBoundary } from '../layout/ErrorBoundary';
 
-const ITEM_HEIGHT = 60;
+import { LIST_ITEM_HEIGHT, LIST_MIN_HEIGHT_PX, LIST_SKELETON_ROW_COUNT, INFINITE_LOADER_THRESHOLD } from '../../constants/ui';
 
 type ItemData = {
   items: ReturnType<typeof usePokemonList>['filteredList'];
@@ -19,10 +26,10 @@ type ItemData = {
   toggleFavorite: ReturnType<typeof useFavorites>['toggleFavorite'];
 };
 
-export const PokemonList: React.FC = () => {
+export const PokemonList: React.FC<{ focusRef?: React.Ref<HTMLDivElement>; height?: number }> = ({ focusRef, height }) => {
   const { filteredList, listStatus, listError, hasMore, loadMore } = usePokemonList();
   const { favoriteIds, toggleFavorite } = useFavorites();
-  const { selectedPokemonId, selectPokemon } = useSelection();
+  const { selectedPokemonId, selectPokemon, selectNext, selectPrev } = useSelection();
 
   const itemData: ItemData = useMemo(
     () => ({
@@ -56,15 +63,28 @@ export const PokemonList: React.FC = () => {
       const pokemon = data.items[index];
 
       return (
-        <div style={style} className="px-1 py-1">
-          <PokemonListItem
-            pokemon={pokemon}
-            index={index}
-            isSelected={data.selectedPokemonId === pokemon.id}
-            isFavorite={data.favoriteIds.has(pokemon.id)}
-            onSelect={data.selectPokemon}
-            onToggleFavorite={data.toggleFavorite}
-          />
+        <div
+          style={style}
+          className="px-1 py-1"
+          id={`pokemon-option-${pokemon.id}`}
+          role="option"
+          aria-selected={data.selectedPokemonId === pokemon.id}
+        >
+          <ErrorBoundary
+            name={`row-${pokemon.id}`}
+            fallback={(error) => (
+              <div className="p-2"><ErrorBanner message={error.message || 'Row failed'} /></div>
+            )}
+          >
+            <PokemonListItem
+              pokemon={pokemon}
+              index={index}
+              isSelected={data.selectedPokemonId === pokemon.id}
+              isFavorite={data.favoriteIds.has(pokemon.id)}
+              onSelect={data.selectPokemon}
+              onToggleFavorite={data.toggleFavorite}
+            />
+          </ErrorBoundary>
         </div>
       );
     },
@@ -80,13 +100,35 @@ export const PokemonList: React.FC = () => {
     isRowLoaded,
     loadMoreRows,
     rowCount: itemCount,
-    threshold: 5
+    threshold: INFINITE_LOADER_THRESHOLD
   });
+
+  const listRef = useRef<WindowedList<ItemData> | null>(null);
+  const { activeIndex, aria } = useListboxNavigation({
+    items: filteredList,
+    selectedId: selectedPokemonId,
+    onSelect: selectPokemon,
+    onToggleFavorite: toggleFavorite,
+  });
+
+  const { visible: showHint, onListScroll, onWrapperKeyDown } = useScrollHint();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const { height: containerHeight } = useElementSize(containerRef);
+  const { showTop, showBottom, handleItemsRendered } = useScrollFades(itemCount);
+
+  // Scroll active item into view when selection changes
+  useEffect(() => {
+    if (activeIndex >= 0) listRef.current?.scrollToItem(activeIndex, 'smart');
+  }, [activeIndex]);
 
   if (listStatus === 'loading') {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner size="lg" />
+      <div className="space-y-2">
+        {Array.from({ length: LIST_SKELETON_ROW_COUNT }).map((_, i) => (
+          <div key={i} className="px-1 py-1">
+            <div className="h-14 rounded-xl bg-slate-800/50 animate-pulse" />
+          </div>
+        ))}
       </div>
     );
   }
@@ -108,18 +150,39 @@ export const PokemonList: React.FC = () => {
   }
 
   return (
-    <WindowedList
-      height={600}
-      width="100%"
-      itemCount={itemCount}
-      itemSize={ITEM_HEIGHT}
-      itemData={itemData}
-      itemKey={(index: number) => (index < filteredList.length ? filteredList[index].id : `loader-${index}`)}
-      onItemsRendered={({ visibleStartIndex, visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) =>
-        onRowsRendered({ startIndex: visibleStartIndex, stopIndex: visibleStopIndex })
-      }
+    <div
+      id="list-panel"
+      ref={(el) => {
+        containerRef.current = el;
+        if (typeof focusRef === 'function') focusRef(el);
+        else if (focusRef && 'current' in (focusRef as React.MutableRefObject<HTMLDivElement | null>)) {
+          (focusRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+        }
+      }}
+      aria-label="Pokémon list"
+      className="relative h-full focus:outline-none focus:ring-2 focus:ring-primary/70 rounded-xl"
+      style={{ minHeight: LIST_MIN_HEIGHT_PX }}
+      onKeyDown={(e) => { aria.onKeyDown?.(e); onWrapperKeyDown(e); }}
+      {...aria}
     >
-      {Row}
-    </WindowedList>
+      <WindowedList
+        height={(height && height > 0) ? height : (containerHeight > 0 ? containerHeight : 360)}
+        width="100%"
+        itemCount={itemCount}
+        itemSize={LIST_ITEM_HEIGHT}
+        itemData={itemData}
+        ref={(instance) => { (listRef as React.MutableRefObject<WindowedList<ItemData> | null>).current = instance as WindowedList<ItemData> | null; }}
+        onScroll={onListScroll}
+        itemKey={(index: number) => (index < filteredList.length ? filteredList[index].id : `loader-${index}`)}
+        onItemsRendered={({ visibleStartIndex, visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) => {
+          handleItemsRendered({ startIndex: visibleStartIndex, stopIndex: visibleStopIndex });
+          onRowsRendered({ startIndex: visibleStartIndex, stopIndex: visibleStopIndex });
+        }}
+      >
+        {Row}
+      </WindowedList>
+      <ScrollFades showTop={showTop} showBottom={showBottom} />
+      <ScrollHint visible={showHint} />
+    </div>
   );
 };

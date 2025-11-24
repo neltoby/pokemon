@@ -11,6 +11,8 @@ export const FavoritesFilterToggle: React.FC<Props> = React.memo(
     <Toggle
       checked={checked}
       onChange={onChange}
+      role="switch"
+      aria-checked={checked}
       label={
         <span>
           Show{' '}

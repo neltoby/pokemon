@@ -23,12 +23,11 @@ export function useFavorites() {
         const data = await fetchFavorites();
         if (cancelled) return;
         dispatch({ type: 'SET_FAVORITES_SUCCESS', payload: data });
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (cancelled) return;
-        dispatch({
-          type: 'SET_FAVORITES_ERROR',
-          payload: err?.message || 'Failed to load favorites'
-        });
+        const message =
+          err instanceof Error ? err.message : 'Failed to load favorites';
+        dispatch({ type: 'SET_FAVORITES_ERROR', payload: message });
       }
     };
 

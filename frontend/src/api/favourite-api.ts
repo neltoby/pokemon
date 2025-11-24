@@ -1,4 +1,4 @@
-import { apiClient, getJSON } from './client';
+import { getJSON, postJSON, deleteJSON } from './client';
 
 export interface Favorite {
   id: string;
@@ -12,9 +12,9 @@ export async function fetchFavorites(): Promise<Favorite[]> {
 }
 
 export async function addFavorite(pokemonId: number, pokemonName: string) {
-  await apiClient.post('/api/favorites', { pokemonId, pokemonName });
+  await postJSON('/api/favorites', { pokemonId, pokemonName });
 }
 
 export async function removeFavorite(pokemonId: number) {
-  await apiClient.delete(`/api/favorites/${pokemonId}`);
+  await deleteJSON(`/api/favorites/${pokemonId}`);
 }

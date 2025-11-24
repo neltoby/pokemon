@@ -10,6 +10,7 @@ import { errorHandler } from '../../interfaces/http/middleware/error-handler.mid
 import { notFoundHandler } from '../../interfaces/http/middleware/not-found-handler.middleware';
 import rateLimit from 'express-rate-limit';
 import { env } from '../../config/env';
+import { RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS } from '../../shared/constants';
 
 export class ExpressAppFactory {
   static create(
@@ -45,7 +46,7 @@ export class ExpressAppFactory {
 
     app.get('/health', (_req, res) => res.json({ status: 'ok' }));
     // Apply rate limit to PokéAPI-proxy routes
-    const readLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false });
+    const readLimiter = rateLimit({ windowMs: RATE_LIMIT_WINDOW_MS, limit: RATE_LIMIT_MAX, standardHeaders: 'draft-7', legacyHeaders: false });
     app.use('/api/pokemon', readLimiter, createPokemonRouter(pokemonController));
     app.use('/api/favorites', createFavoriteRouter(favoriteController));
 

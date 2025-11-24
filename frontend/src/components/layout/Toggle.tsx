@@ -4,15 +4,19 @@ interface ToggleProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label?: React.ReactNode;
+  // pass-through props for accessibility
+  role?: string;
+  'aria-checked'?: boolean;
 }
 
 export const Toggle: React.FC<ToggleProps> = React.memo(
-  ({ checked, onChange, label }) => {
+  ({ checked, onChange, label, ...aria }) => {
     return (
       <button
         type="button"
         onClick={() => onChange(!checked)}
         className="flex items-center gap-2"
+        {...aria}
       >
         <span
           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${

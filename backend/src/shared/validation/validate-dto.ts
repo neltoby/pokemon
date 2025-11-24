@@ -12,7 +12,7 @@ export class ValidationError extends Error {
 }
 
 export async function validateDto<T extends object>(dto: T): Promise<void> {
-  const errors = await validate(dto as any, {
+  const errors = await validate(dto as object, {
     whitelist: true,
     forbidNonWhitelisted: true
   });

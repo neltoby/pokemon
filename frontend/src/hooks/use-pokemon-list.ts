@@ -34,12 +34,11 @@ export function usePokemonList() {
         const page = await fetchPokemonPage(PAGE_SIZE, 0);
         if (cancelled) return;
         dispatch({ type: 'SET_LIST_SUCCESS', payload: page });
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (cancelled) return;
-        dispatch({
-          type: 'SET_LIST_ERROR',
-          payload: err?.message || 'Failed to load Pokémon list'
-        });
+        const message =
+          err instanceof Error ? err.message : 'Failed to load Pokémon list';
+        dispatch({ type: 'SET_LIST_ERROR', payload: message });
       }
     };
 

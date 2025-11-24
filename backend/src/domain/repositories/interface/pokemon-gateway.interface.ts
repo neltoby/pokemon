@@ -10,6 +10,7 @@ export interface PokemonDetails {
   abilities: string[];
   types: string[];
   evolutions: string[];
+  imageUrl: string | null;
 }
 
 export interface IPokemonGateway {

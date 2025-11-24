@@ -12,6 +12,7 @@ export interface PokemonDetails {
   abilities: string[];
   types: string[];
   evolutions: string[];
+  imageUrl: string | null;
 }
 
 export interface PokemonPage {
@@ -28,4 +29,26 @@ export async function fetchPokemonDetails(
   nameOrId: string | number
 ): Promise<PokemonDetails> {
   return getJSON<PokemonDetails>(`/api/pokemon/${nameOrId}`);
+}
+
+export function getPokemonImageUrl(
+  id: number,
+  variant: 'thumb' | 'artwork' = 'thumb'
+): string {
+  if (variant === 'artwork') {
+    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+  }
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+}
+
+export function getPokemonImageCandidates(id: number): string[] {
+  // Try multiple well-known sprite sources
+  return [
+    // Default classic sprite
+    `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`,
+    // Official artwork
+    `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`,
+    // Home sprites
+    `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/${id}.png`
+  ];
 }
