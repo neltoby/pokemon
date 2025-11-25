@@ -111,6 +111,10 @@ export function createPokemonRouter(
       try {
         const { nameOrId } = req.params;
         const data = await pokemonController.getDetails(nameOrId);
+        const preloadUrl = data.artworkUrl || (data.imageUrl ? `${req.protocol}://${req.get('host')}/api/pokemon/${nameOrId}/image` : null);
+        if (preloadUrl) {
+          res.set('Link', `<${preloadUrl}>; rel=preload; as=image, <https://raw.githubusercontent.com>; rel=preconnect`);
+        }
         // Fresh for configured duration; no background revalidation
         res.set('Cache-Control', `public, max-age=${READ_CACHE_MAX_AGE_SECONDS}`);
         res.set('Vary', 'Accept-Encoding');

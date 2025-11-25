@@ -168,7 +168,10 @@ export class PokeApiGateway implements IPokemonGateway {
         return resp.data.results.map(({ name, url }) => {
           const m = /\/pokemon\/(\d+)\/?$/.exec(url);
           const id = m ? parseInt(m[1], 10) : NaN;
-          return { id, name, url } satisfies PokemonSummary;
+          const thumbUrl = Number.isFinite(id) && id > 0
+            ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`
+            : undefined;
+          return { id, name, url, thumbUrl } satisfies PokemonSummary;
         });
       },
     );
@@ -186,7 +189,13 @@ export class PokeApiGateway implements IPokemonGateway {
           abilities: { ability: { name: string } }[];
           types: { type: { name: string } }[];
           species: { url: string };
-          sprites?: { back_default?: string | null; front_default?: string | null };
+          sprites?: {
+            back_default?: string | null;
+            front_default?: string | null;
+            other?: {
+              [k: string]: { front_default?: string | null } | undefined;
+            };
+          };
         }
         interface SpeciesResponse {
           evolution_chain?: { url?: string | null } | null;
@@ -216,7 +225,10 @@ export class PokeApiGateway implements IPokemonGateway {
           evolutions = this.extractEvolutions(evolutionResp.data.chain);
         }
 
-        const imageUrl = pokemonResp.data.sprites?.back_default ?? null;
+        const sprites = pokemonResp.data.sprites;
+        const imageUrl = sprites?.back_default ?? null;
+        const thumbUrl = sprites?.front_default ?? null;
+        const artworkUrl = sprites?.other?.["official-artwork"]?.front_default ?? null;
 
         return {
           id: pokemonResp.data.id,
@@ -225,6 +237,8 @@ export class PokeApiGateway implements IPokemonGateway {
           types: pokemonResp.data.types.map((t) => t.type.name),
           evolutions,
           imageUrl,
+          thumbUrl,
+          artworkUrl,
         };
       },
     );

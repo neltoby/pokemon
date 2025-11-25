@@ -42,6 +42,7 @@ export const PokemonListItem: React.FC<Props> = React.memo(
               id={pokemon.id}
               name={pokemon.name}
               alt={pokemon.name}
+              src={pokemon.thumbUrl}
               className="h-10 w-10 object-contain"
             />
             <div className="absolute inset-0 bg-gradient-to-br from-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />

@@ -4,6 +4,7 @@ export interface PokemonSummary {
   id: number;
   name: string;
   url: string;
+  thumbUrl?: string;
 }
 
 export interface PokemonDetails {
@@ -13,6 +14,8 @@ export interface PokemonDetails {
   types: string[];
   evolutions: string[];
   imageUrl: string | null;
+  thumbUrl?: string | null;
+  artworkUrl?: string | null;
 }
 
 export interface PokemonPage {

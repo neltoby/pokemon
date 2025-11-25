@@ -6,25 +6,29 @@ interface Props {
   alt: string;
   className?: string;
   name?: string;
+  src?: string;
 }
 
-export const PokemonImg: React.FC<Props> = ({ id, alt, className, name }) => {
+export const PokemonImg: React.FC<Props> = ({ id, alt, className, name, src }) => {
   const sources = useMemo(() => {
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
     const base = getPokemonImageCandidates(id);
-    // Prefer backend proxy as first candidate to avoid CDN/network issues
-    base.unshift(`${apiBase}/api/pokemon/${id}/image`);
+    // Prefer provided src if any
+    const candidates: string[] = src ? [src] : [];
+    // Prefer backend proxy as next candidate to avoid CDN/network issues
+    candidates.push(`${apiBase}/api/pokemon/${id}/image`);
+    candidates.push(...base);
     if (name) {
       const n = name.toLowerCase();
       // Name-based fallbacks via pokemondb
-      base.push(
+      candidates.push(
         `https://img.pokemondb.net/artwork/large/${n}.jpg`,
         `https://img.pokemondb.net/sprites/home/normal/${n}.png`,
         `https://img.pokemondb.net/sprites/x-y/normal/${n}.png`
       );
     }
-    return base;
-  }, [id, name]);
+    return candidates;
+  }, [id, name, src]);
   const [idx, setIdx] = useState(0);
 
   const handleError = useCallback(() => {

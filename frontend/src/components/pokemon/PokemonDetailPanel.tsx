@@ -67,9 +67,9 @@ export const PokemonDetailPanel: React.FC = () => {
               #{String(details.id).padStart(3, '0')}
             </p>
           </div>
-          {details.imageUrl ? (
+          {details.artworkUrl ? (
             <img
-              src={details.imageUrl}
+              src={details.artworkUrl}
               alt={details.name}
               className="h-24 w-24 object-contain rounded-xl bg-slate-800"
               loading="lazy"
@@ -80,6 +80,7 @@ export const PokemonDetailPanel: React.FC = () => {
               id={details.id}
               name={details.name}
               alt={details.name}
+              src={details.thumbUrl || undefined}
               className="h-24 w-24 object-contain rounded-xl bg-slate-800"
             />
           )}
